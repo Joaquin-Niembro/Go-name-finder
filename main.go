@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 )
 
 func fetchGender(names []string, quit <-chan struct{}) <-chan string {
@@ -34,12 +35,31 @@ func fetchGender(names []string, quit <-chan struct{}) <-chan string {
 	return genders
 }
 
+func countGenders(genders <-chan string) map[string]int {
+	m := make(map[string]int)
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	for gender := range genders {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mu.Lock()
+			m[gender]++
+			mu.Unlock()
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+	}()
+	return m
+}
 func main() {
 	names := []string{"Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Hannah", "Ivan", "John", "Katie", "Liam", "Mia", "Nathan", "Olivia", "Peter", "Quinn", "Rachel", "Steve", "Tina", "Ursula", "Victor", "Wendy", "Xavier", "Yvonne", "Zach"}
 	quit := make(chan struct{})
 	defer close(quit)
 	genders := fetchGender(names, quit)
-	for name := range genders {
-		fmt.Println(name)
-	}
+	count := countGenders(genders)
+	fmt.Println("male: ", count["male"])
+	fmt.Println("female: ", count["female"])
 }
